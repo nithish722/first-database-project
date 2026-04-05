@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Taste Hub - My Orders</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .order-card {
+            background: rgba(255,255,255,0.4);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .timeline {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+            position: relative;
+        }
+        .timeline::before {
+            content: '';
+            position: absolute;
+            top: 15px;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: rgba(255,255,255,0.5);
+            z-index: 1;
+        }
+        .time-point {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+            flex: 1;
+        }
+        .time-dot {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: #fff;
+            border: 4px solid #ddd;
+            margin: 0 auto 10px;
+            transition: 0.3s;
+        }
+        .time-point.active .time-dot {
+            border-color: #ff9a9e;
+            background: #ff9a9e;
+        }
+        .time-point.danger .time-dot {
+            border-color: #ff7675;
+            background: #ff7675;
+        }
+        
+        /* Map Mock */
+        .map-container {
+            height: 200px;
+            background: url('https://source.unsplash.com/600x200/?map,streets') center/cover;
+            border-radius: 12px;
+            position: relative;
+            margin-top: 20px;
+            overflow: hidden;
+            display: none;
+        }
+        .map-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.4); /* Glass over map */
+            backdrop-filter: blur(2px);
+        }
+        .delivery-pin {
+            position: absolute;
+            top: 50%; left: 10%;
+            font-size: 2rem;
+            animation: drive 10s infinite alternate linear;
+        }
+
+        @keyframes drive {
+            from { left: 10%; }
+            to { left: 80%; }
+        }
+
+        .review-box {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255,255,255,0.5);
+            border-radius: 8px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <header class="glass-panel" style="margin: 20px 20px 0 20px; border-radius: 16px;">
+        <div class="logo">🍳 Taste Hub Orders</div>
+        <div>
+            <button onclick="window.location.href='/customer.html'">Back to Kitchens</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <h2 class="mb-2">Order History & Tracking</h2>
+        <div id="orders-list">
+            <p>Loading orders...</p>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        if (!App.state.user || App.state.role !== 'customer') {
+            window.location.href = '/index.html';
+        }
+
+        async function loadOrders() {
+            const container = document.getElementById('orders-list');
+            const orders = await App.getUserOrders();
+            
+            if (orders.length === 0) {
+                container.innerHTML = '<p>You have no orders.</p>';
+                return;
+            }
+
+            container.innerHTML = orders.map(o => {
+                const statusIndex = getStatusIndex(o.status);
+                const isCanceled = o.status === 'Cancel';
+                
+                let timelineHTML = '';
+                if (isCanceled) {
+                    timelineHTML = `
+                    <div class="timeline">
+                        <div class="time-point danger"><div class="time-dot"></div><div>Canceled</div></div>
+                    </div>`;
+                } else {
+                    timelineHTML = `
+                    <div class="timeline">
+                        <div class="time-point ${statusIndex >= 0 ? 'active' : ''}"><div class="time-dot"></div><div>Placed</div></div>
+                        <div class="time-point ${statusIndex >= 1 ? 'active' : ''}"><div class="time-dot"></div><div>Confirmed</div></div>
+                        <div class="time-point ${statusIndex >= 2 ? 'active' : ''}"><div class="time-dot"></div><div>Delivering</div></div>
+                        <div class="time-point ${statusIndex >= 3 ? 'active' : ''}"><div class="time-dot"></div><div>Delivered</div></div>
+                    </div>`;
+                }
+
+                // Show map only if delivering
+                const showMap = o.status === 'Delivering' ? 'block' : 'none';
+                
+                // Show review if delivered
+                const showReview = o.status === 'Delivered' ? 'block' : 'none';
+                
+                // Cancel button only for Placed / Confirmed
+                const showCancel = statusIndex <= 1 && !isCanceled ? 'inline-block' : 'none';
+
+                return `
+                <div class="order-card box-shadow">
+                    <div class="flex-between">
+                        <h3>Order #${o.order_id}</h3>
+                        <span style="font-weight:bold; color: #555;">$${o.total_amount.toFixed(2)}</span>
+                    </div>
+                    <div style="font-size:0.9rem; margin-top:5px; color:#666;">
+                        Items: ${o.items.map(i => `${i.quantity}x ${i.item_name}`).join(', ')}
+                        <br>Placed on: ${new Date(o.order_date).toLocaleString()}
+                    </div>
+                    
+                    ${timelineHTML}
+                    
+                    <button onclick="cancelOrder(${o.order_id})" class="mt-2" style="display:${showCancel}; background: rgba(255,0,0,0.1); color: red; border: 1px solid red;">Cancel Order</button>
+
+                    <div class="map-container" style="display: ${showMap}">
+                        <div class="map-overlay"></div>
+                        <div class="delivery-pin">🛵</div>
+                    </div>
+
+                    <div class="review-box" style="display: ${showReview}">
+                        <h4 class="mb-2">Leave a Review</h4>
+                        <select id="rating-${o.order_id}">
+                            <option value="5">⭐⭐⭐⭐⭐ Excellent</option>
+                            <option value="4">⭐⭐⭐⭐ Good</option>
+                            <option value="3">⭐⭐⭐ Neutral</option>
+                            <option value="2">⭐⭐ Poor</option>
+                            <option value="1">⭐ Terrible</option>
+                        </select>
+                        <textarea id="comment-${o.order_id}" placeholder="Write your review here..." rows="2"></textarea>
+                        <button onclick="submitReview(${o.order_id}, ${o.kitchen_id})" class="primary">Submit Review</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function getStatusIndex(status) {
+            const st = ['Placed', 'Confirmed', 'Delivering', 'Delivered'];
+            // Since backend default is Confirmed:
+            if(status === 'Confirmed') return 1;
+            if(status === 'Delivering') return 2;
+            if(status === 'Delivered') return 3;
+            return 0; // fallback
+        }
+
+        async function submitReview(orderId, kitchenId) {
+            const rating = document.getElementById(`rating-${orderId}`).value;
+            const comment = document.getElementById(`comment-${orderId}`).value;
+            
+            const res = await App.submitReview(App.state.user.user_id, kitchenId, parseInt(rating), comment);
+            if (res.success) {
+                alert('Review submitted successfully! Thank you.');
+                const btn = document.querySelector(`button[onclick="submitReview(${orderId}, ${kitchenId})"]`);
+                if(btn) {
+                    btn.innerText = "Submitted!";
+                    btn.disabled = true;
+                    btn.style.opacity = 0.5;
+                }
+            } else {
+                alert('Failed to submit review.');
+            }
+        }
+        
+        async function cancelOrder(orderId) {
+            if (confirm("Are you sure you want to cancel this order?")) {
+                const res = await App.cancelOrder(orderId);
+                if(res.success) {
+                    alert('Order canceled.');
+                    loadOrders();
+                } else {
+                    alert('Could not cancel order: ' + res.message);
+                }
+            }
+        }
+
+        loadOrders();
+    </script>
+</body>
+</html>

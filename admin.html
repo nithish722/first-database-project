@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Taste Hub - Admin Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .dashboard {
+            display: flex;
+            gap: 20px;
+        }
+        .sidebar {
+            width: 250px;
+        }
+        .content {
+            flex: 1;
+        }
+        .menu-item {
+            padding: 15px;
+            cursor: pointer;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+            transition: 0.3s;
+        }
+        .menu-item:hover, .menu-item.active {
+            background: rgba(255,255,255,0.4);
+            border-radius: 8px;
+        }
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .status-Confirmed { background: #ffeaa7; color: #d63031; }
+        .status-Delivering { background: #74b9ff; color: #0984e3; }
+        .status-Delivered { background: #55efc4; color: #00b894; }
+        .status-Cancel { background: #ff7675; color: #d63031; }
+        
+        table {
+            background: rgba(255,255,255,0.2);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        tr:hover { background: rgba(255,255,255,0.4); }
+        .chart-container {
+            background: rgba(255,255,255,0.2);
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 20px;
+        }
+        .charts-row {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .chart-box {
+            flex: 1;
+            min-width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <header class="glass-panel" style="margin: 20px; border-radius: 16px;">
+        <div class="logo">🍳 Taste Hub Admin</div>
+        <div>
+            <span id="admin-name" style="margin-right: 15px; font-weight: 600;"></span>
+            <button onclick="App.logout()" style="padding: 8px 15px;">Logout</button>
+        </div>
+    </header>
+
+    <div class="container dashboard">
+        <div class="glass-panel sidebar">
+            <div class="menu-item active" onclick="showTab('orders')">Manage Orders</div>
+            <div class="menu-item" onclick="showTab('customers')">Customers</div>
+            <div class="menu-item" onclick="showTab('analytics')">Analytics</div>
+        </div>
+
+        <div class="glass-panel content" id="main-content">
+            <!-- Dynamic Content -->
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        if (!App.state.user || App.state.role !== 'admin') {
+            window.location.href = '/index.html';
+        } else {
+            document.getElementById('admin-name').innerText = `Welcome, ${App.state.user.admin_name}`;
+            showTab('orders');
+        }
+
+        async function showTab(tabName) {
+            document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            const content = document.getElementById('main-content');
+            content.innerHTML = '<p>Loading...</p>';
+            
+            if (tabName === 'orders') {
+                const orders = await App.getAdminOrders();
+                let html = '<h2>Recent Orders</h2><table class="mt-2" style="width:100%">';
+                html += '<tr><th>Order ID</th><th>Customer</th><th>Kitchen</th><th>Total</th><th>Status</th><th>Action</th></tr>';
+                
+                orders.forEach(o => {
+                    html += `
+                    <tr>
+                        <td>#${o.order_id}</td>
+                        <td>
+                            <strong>${o.user_name}</strong><br>
+                            <small>${o.user_phone || 'No phone'} | ${o.user_address || 'No address'}</small>
+                        </td>
+                        <td>${o.kitchen_name}</td>
+                        <td>$${o.total_amount.toFixed(2)}<br><small>${o.payment_methods}</small></td>
+                        <td><span class="status-badge status-${o.status}">${o.status}</span></td>
+                        <td>
+                            <select onchange="updateStatus(${o.order_id}, this.value)">
+                                <option value="" disabled selected>Update Status</option>
+                                <option value="Confirmed">Confirm</option>
+                                <option value="Delivering">Out-for Default</option>
+                                <option value="Delivered">Delivered</option>
+                                <option value="Cancel">Cancel</option>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="6" style="padding-top:0; padding-bottom: 20px; font-size:0.9rem; color:#555;">
+                            Items: ${o.items.map(i => `${i.quantity}x ${i.item_name}`).join(', ')}
+                        </td>
+                    </tr>`;
+                });
+                html += '</table>';
+                content.innerHTML = html;
+            } else if (tabName === 'customers') {
+                // Not fully implemented in backend but simple list
+                const res = await fetch(`${API_BASE}/admin/customers`);
+                const customers = await res.json();
+                let html = '<h2>Customers List</h2><table class="mt-2" style="width:100%">';
+                html += '<tr><th>ID</th><th>Name</th><th>Email</th><th>Phone</th></tr>';
+                customers.forEach(c => {
+                    html += `<tr><td>${c.user_id}</td><td>${c.name}</td><td>${c.email}</td><td>${c.phone || '-'}</td></tr>`;
+                });
+                html += '</table>';
+                content.innerHTML = html;
+            } else if (tabName === 'analytics') {
+                const stats = await App.getAdminStats();
+                content.innerHTML = `
+                    <h2>Business Analytics</h2>
+                    <div class="charts-row">
+                        <div class="chart-container chart-box">
+                            <h3 class="mb-2">Kitchen Ratings</h3>
+                            <canvas id="ratingsChart"></canvas>
+                        </div>
+                        <div class="chart-container chart-box">
+                            <h3 class="mb-2">Kitchen Revenue</h3>
+                            <canvas id="revenueChart"></canvas>
+                        </div>
+                    </div>
+                `;
+
+                // Render Ratings Bar Chart
+                const ctxRatings = document.getElementById('ratingsChart').getContext('2d');
+                new Chart(ctxRatings, {
+                    type: 'bar',
+                    data: {
+                        labels: stats.kitchen_ratings.map(r => r.kitchen_name),
+                        datasets: [{
+                            label: 'Average Rating',
+                            data: stats.kitchen_ratings.map(r => r.avg_rating),
+                            backgroundColor: 'rgba(255, 154, 158, 0.6)',
+                            borderColor: '#ff9a9e',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        scales: { y: { beginAtZero: true, max: 5 } }
+                    }
+                });
+
+                // Render Revenue Pie Chart
+                const ctxRevenue = document.getElementById('revenueChart').getContext('2d');
+                new Chart(ctxRevenue, {
+                    type: 'pie',
+                    data: {
+                        labels: stats.kitchen_revenue.map(r => r.kitchen_name),
+                        datasets: [{
+                            label: 'Revenue ($)',
+                            data: stats.kitchen_revenue.map(r => r.revenue),
+                            backgroundColor: [
+                                '#ff9a9e', '#fad0c4', '#ff8177', '#ff8a73', '#ffb199', '#fecfef'
+                            ],
+                            borderWidth: 1
+                        }]
+                    }
+                });
+            }
+        }
+
+        async function updateStatus(orderId, status) {
+            const res = await App.updateOrderStatus(orderId, status);
+            if (res.success) {
+                alert(`Order #${orderId} updated to ${status}`);
+                showTab('orders'); // reload
+            } else {
+                alert('Error updating status');
+            }
+        }
+    </script>
+</body>
+</html>

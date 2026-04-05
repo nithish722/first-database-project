@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Taste Hub - Cloud Kitchen</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .splash {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .splash-content {
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        .splash-content img {
+            width: 120px;
+            margin-bottom: 20px;
+            border-radius: 50%;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 2px solid rgba(255,255,255,0.3);
+        }
+        .tab {
+            flex: 1;
+            padding: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            opacity: 0.6;
+            transition: 0.3s;
+        }
+        .tab.active {
+            opacity: 1;
+            border-bottom: 3px solid #ff9a9e;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="splash">
+        <div class="glass-panel splash-content">
+            <img src="https://source.unsplash.com/200x200/?burger,chef" alt="Taste Hub Logo">
+            <h1 class="mb-2">Taste Hub</h1>
+            <p class="mb-2" style="color: #444;">Premium Cloud Kitchen Management System</p>
+            
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('user')">Customer</div>
+                <div class="tab" onclick="switchTab('admin')">Admin</div>
+            </div>
+
+            <form id="auth-form" onsubmit="handleAuth(event)">
+                <input type="email" id="email" placeholder="Email Address" required>
+                <input type="password" id="password" placeholder="Password" required>
+                <button type="submit" class="primary" style="width: 100%; margin-top: 15px;">Login</button>
+            </form>
+            
+            <p class="mt-2" style="font-size: 0.9rem;">
+                New here? <a href="#" onclick="toggleMode(event)" id="toggle-text" style="color: #ff9a9e;">Create an account</a>
+            </p>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        let isLogin = true;
+        let authRole = 'user'; // 'user' or 'admin'
+
+        // Check if already logged in
+        if (App.state.user) {
+            window.location.href = App.state.role === 'admin' ? '/admin.html' : '/customer.html';
+        }
+
+        function switchTab(role) {
+            authRole = role;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+
+        function toggleMode(e) {
+            e.preventDefault();
+            isLogin = !isLogin;
+            const btn = document.querySelector('button[type="submit"]');
+            const txt = document.getElementById('toggle-text');
+            const form = document.getElementById('auth-form');
+            
+            if (isLogin) {
+                btn.innerText = 'Login';
+                txt.innerText = 'Create an account';
+                const nameInput = document.getElementById('reg_name');
+                if(nameInput) nameInput.remove();
+            } else {
+                btn.innerText = 'Sign Up';
+                txt.innerText = 'Already have an account? Login';
+                const nameInput = document.createElement('input');
+                nameInput.type = 'text';
+                nameInput.id = 'reg_name';
+                nameInput.placeholder = 'Full Name';
+                nameInput.required = true;
+                form.insertBefore(nameInput, form.firstChild);
+            }
+        }
+
+        async function handleAuth(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            if (isLogin) {
+                const res = await App.login(email, password, authRole === 'admin');
+                if (res.success) {
+                    window.location.href = authRole === 'admin' ? '/admin.html' : '/customer.html';
+                } else {
+                    alert(res.message);
+                }
+            } else {
+                // Register
+                const name = document.getElementById('reg_name').value;
+                const endpoint = authRole === 'admin' ? '/auth/admin_register' : '/auth/register';
+                
+                const res = await fetch(`${API_BASE}${endpoint}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ name, email, password })
+                });
+                
+                const data = await res.json();
+                if (data.success) {
+                    alert("Registration successful. Please login.");
+                    toggleMode({preventDefault: () => {}}); // switch back to login
+                } else {
+                    alert(data.message);
+                }
+            }
+        }
+    </script>
+</body>
+</html>

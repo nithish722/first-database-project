@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Taste Hub - Kitchens</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .cart-widget {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+            padding: 15px 25px;
+            border-radius: 30px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+            cursor: pointer;
+            font-weight: bold;
+            display: none;
+            z-index: 100;
+        }
+        .menu-modal-content {
+            background: rgba(255,255,255,0.85);
+            backdrop-filter: blur(15px);
+            padding: 25px;
+            border-radius: 20px;
+            width: 100%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .menu-item-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px 0;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+        }
+        .menu-item-row img {
+            width: 80px;
+            height: 80px;
+            border-radius: 12px;
+            object-fit: cover;
+        }
+        .menu-info { flex: 1; }
+        
+        /* Subscription Banner */
+        .subs-banner {
+            background: rgba(255,255,255,0.3);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .plan {
+            background: rgba(255,255,255,0.5);
+            padding: 15px 20px;
+            border-radius: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: 0.3s;
+            border: 2px solid transparent;
+        }
+        .plan:hover { transform: scale(1.05); }
+        .plan.active { border-color: #ff9a9e; background: rgba(255, 154, 158, 0.2); }
+        
+        /* Trending Carousel */
+        .trending-container {
+            display: flex;
+            overflow-x: auto;
+            gap: 15px;
+            padding-bottom: 10px;
+        }
+        .trending-container::-webkit-scrollbar { height: 6px; }
+        .trending-container::-webkit-scrollbar-track { background: transparent; }
+        .trending-container::-webkit-scrollbar-thumb { background: rgba(255,154,158,0.5); border-radius: 3px; }
+        
+        .tab-btn {
+            background: none; border: none; padding: 10px 20px;
+            font-size: 1.1rem; cursor: pointer; border-bottom: 2px solid transparent; transition: 0.3s;
+        }
+        .tab-btn.active { border-bottom-color: #ff9a9e; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <header class="glass-panel" style="margin: 20px 20px 0 20px; border-radius: 16px;">
+        <div class="logo">🍳 Taste Hub</div>
+        <div>
+            <span id="user-name" style="margin-right: 15px; font-weight: 600;"></span>
+            <button onclick="window.location.href='/tracking.html'" style="margin-right: 10px;">My Orders</button>
+            <button onclick="App.logout()">Logout</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Subscription Options -->
+        <div class="subs-banner glass-panel">
+            <div style="flex: 1 1 100%; text-align: center; margin-bottom: 15px;">
+                <h3>Get Premium Offers</h3>
+                <p>Select a subscription to get discounts on your orders!</p>
+            </div>
+            <div class="plan" onclick="selectPlan('1mo')" id="plan-1mo">
+                <h4>1 Month</h4>
+                <p>5% off total</p>
+            </div>
+            <div class="plan" onclick="selectPlan('3mo')" id="plan-3mo">
+                <h4>3 Months</h4>
+                <p>10% off total</p>
+            </div>
+            <div class="plan" onclick="selectPlan('1yr')" id="plan-1yr">
+                <h4>1 Year</h4>
+                <p>20% off total + Free Delivery</p>
+            </div>
+        </div>
+
+        <h2 class="mb-2 mt-2">🔥 Trending Kitchens</h2>
+        <div id="trending-grid" class="trending-container">
+            <p>Loading trending...</p>
+        </div>
+
+        <h2 class="mb-2 mt-2">All Kitchens</h2>
+        <div id="kitchens-grid" class="grid-container">
+            <p>Loading kitchens...</p>
+        </div>
+    </div>
+
+    <!-- Floating Cart Widget -->
+    <div id="cart-widget" class="cart-widget" onclick="window.location.href='/payment.html'">
+        🛒 Checkout (<span id="cart-count">0</span> items) - $<span id="cart-total">0.00</span>
+    </div>
+
+    <!-- Menu Modal Overlay -->
+    <div id="menu-modal" class="overlay hidden">
+        <div class="modal menu-modal-content glass-panel" style="max-width: 600px;">
+            <div class="flex-between mb-2">
+                <h2 id="modal-kitchen-name">Kitchen Name</h2>
+                <button onclick="closeModal()" style="padding: 5px 10px; background: rgba(255,0,0,0.1);">X</button>
+            </div>
+            <div style="display: flex; gap: 10px; border-bottom: 1px solid rgba(0,0,0,0.1); margin-bottom: 15px;">
+                <button class="tab-btn active" id="tab-menu" onclick="switchModalTab('menu')">Menu Items</button>
+                <button class="tab-btn" id="tab-reviews" onclick="switchModalTab('reviews')">Customer Reviews</button>
+            </div>
+            <div id="menu-list">
+                <!-- Menu items here -->
+            </div>
+            <div id="reviews-list" class="hidden">
+                <!-- Reviews here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        if (!App.state.user || App.state.role !== 'customer') {
+            window.location.href = '/index.html';
+        } else {
+            document.getElementById('user-name').innerText = `Hello, ${App.state.user.name}`;
+            loadKitchens();
+            updateCartWidget();
+        }
+
+        let currentKitchenIdModal = null;
+
+        // Handle Subscriptions (Mock logic saving to localStorage for demo)
+        const activePlan = localStorage.getItem('tastehub_sub') || null;
+        if(activePlan) selectPlan(activePlan);
+
+        function selectPlan(plan) {
+            document.querySelectorAll('.plan').forEach(el => el.classList.remove('active'));
+            document.getElementById(`plan-${plan}`).classList.add('active');
+            localStorage.setItem('tastehub_sub', plan);
+        }
+
+        async function loadKitchens() {
+            const kitchens = await App.getKitchens();
+            const grid = document.getElementById('kitchens-grid');
+            const trendingGrid = document.getElementById('trending-grid');
+            
+            if(kitchens.length === 0) {
+                grid.innerHTML = '<p>No kitchens available.</p>';
+                trendingGrid.innerHTML = '';
+                return;
+            }
+            
+            const cardHTML = (k) => `
+                <div class="card" onclick="openMenu(${k.kitchen_id}, '${k.kitchen_name.replace(/'/g, "\\'")}')" style="min-width: 280px;">
+                    <img src="${k.image_url}" alt="${k.kitchen_name}" onerror="this.src='/images/default_kitchen.svg'">
+                    <div class="card-body">
+                        <h3 class="card-title">${k.kitchen_name}</h3>
+                        <p class="card-desc">${k.descriptions}</p>
+                        <small>📍 ${k.location}</small>
+                    </div>
+                </div>
+            `;
+            
+            grid.innerHTML = kitchens.map(k => cardHTML(k)).join('');
+            
+            // Randomly select 4 trending kitchens
+            const trending = [...kitchens].sort(() => 0.5 - Math.random()).slice(0, 4);
+            trendingGrid.innerHTML = trending.map(k => cardHTML(k)).join('');
+        }
+
+        async function openMenu(kitchenId, kitchenName) {
+            currentKitchenIdModal = kitchenId;
+            document.getElementById('modal-kitchen-name').innerText = kitchenName;
+            document.getElementById('menu-list').innerHTML = '<p class="text-center">Loading menu...</p>';
+            document.getElementById('reviews-list').innerHTML = '<p class="text-center">Loading reviews...</p>';
+            document.getElementById('menu-modal').classList.remove('hidden');
+            switchModalTab('menu');
+
+            const data = await App.getKitchenMenu(kitchenId);
+            const reviewsData = await App.getKitchenReviews(kitchenId);
+            
+            if (data.menu.length === 0) {
+                document.getElementById('menu-list').innerHTML = '<p>No items found for this kitchen.</p>';
+            } else {
+                document.getElementById('menu-list').innerHTML = data.menu.map(item => `
+                    <div class="menu-item-row">
+                        <img src="${item.image_url}" alt="${item.item_name}" onerror="this.src='/images/default_food.svg'">
+                        <div class="menu-info">
+                            <div style="font-weight: 600; font-size: 1.1rem;">${item.item_name}</div>
+                            <div style="font-size: 0.9rem; color: #555;">${item.description}</div>
+                            <div style="color: #d63031; font-weight: bold; margin-top: 5px;">$${item.price.toFixed(2)}</div>
+                        </div>
+                        <button onclick="addToCartObj(${item.item_id}, '${item.item_name.replace(/'/g, "\\'")}', ${item.price}, ${kitchenId})" style="padding: 8px 15px;">Add</button>
+                    </div>
+                `).join('');
+            }
+            
+            if (reviewsData.length === 0) {
+                document.getElementById('reviews-list').innerHTML = '<p>No reviews yet. Be the first after your order!</p>';
+            } else {
+                document.getElementById('reviews-list').innerHTML = reviewsData.map(r => `
+                    <div style="padding: 15px; border-bottom: 1px solid #ddd;">
+                        <div style="font-weight: bold; margin-bottom: 5px;">${r.user_name} <span style="color:#f39c12;">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</span></div>
+                        <p style="color:#555;">${r.comment}</p>
+                        <small style="color:#aaa;">${new Date(r.review_date).toLocaleDateString()}</small>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function switchModalTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`tab-${tab}`).classList.add('active');
+            
+            if (tab === 'menu') {
+                document.getElementById('menu-list').classList.remove('hidden');
+                document.getElementById('reviews-list').classList.add('hidden');
+            } else {
+                document.getElementById('menu-list').classList.add('hidden');
+                document.getElementById('reviews-list').classList.remove('hidden');
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('menu-modal').classList.add('hidden');
+        }
+
+        function addToCartObj(itemId, itemName, price, kitchenId) {
+            const success = App.addToCart({item_id: itemId, item_name: itemName, price: price}, kitchenId);
+            if(success) {
+                updateCartWidget();
+                
+                // Show floating animation text or quick toast
+                const toast = document.createElement('div');
+                toast.innerText = 'Added to Cart!';
+                toast.style.cssText = 'position:fixed; background:#2ecc71; color:white; padding:10px; border-radius:5px; top:20px; right:20px; z-index:9999;';
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 1500);
+            }
+        }
+
+        function updateCartWidget() {
+            const count = App.state.cart.reduce((sum, i) => sum + i.quantity, 0);
+            const total = App.getCartTotal();
+            
+            const widget = document.getElementById('cart-widget');
+            if (count > 0) {
+                widget.style.display = 'block';
+                document.getElementById('cart-count').innerText = count;
+                document.getElementById('cart-total').innerText = total.toFixed(2);
+            } else {
+                widget.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
